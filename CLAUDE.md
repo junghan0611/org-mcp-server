@@ -2,7 +2,9 @@
 
 ## Project Context
 
-This is a GitHub repository hosted in https://github.com/szaffarano/org-mcp-server/
+**Upstream**: https://github.com/szaffarano/org-mcp-server/ (Sebastian Zaffarano)
+**Fork**: https://github.com/junghan0611/org-mcp-server/ (ko branch)
+**Local**: ~/repos/3rd/org-mcp-server
 
 MCP server for org-mode/roam knowledge base management in Rust. Multi-crate
 workspace with:
@@ -14,7 +16,37 @@ workspace with:
 **Goal**: Provide search, content creation, and note linking with media
 references for org-mode files.
 
-## Development Commands
+### Original Author Background
+
+**Sebastian Zaffarano** (Elastic employee)
+- **Editor**: Neovim (not Emacs!)
+- **Stack**: nvim-orgmode + org-roam.nvim + nvim-mcp + telescope
+- **NixOS user**: https://github.com/szaffarano/nix-dotfiles
+- **Why org-mode**: Editor-independent knowledge base + AI agent integration
+
+### Our Fork (ko branch)
+
+**Purpose**: Korean localization + performance improvements + Denote support
+
+**Test Environment**:
+- 2140+ org files in ~/org/ (notes/, meta/, bib/, llmlog/)
+- Denote naming: `YYYYMMDDTHHMMSS--title__tags.org`
+- Multiple silos: ~/org/, ~/claude-memory/, ~/repos/gh/*/docs
+
+## Build Commands
+
+### NixOS Build (Recommended)
+
+```bash
+./build-nixos.sh           # Build and install to ~/.local/bin
+nix build .#default        # Build only
+```
+
+**Installed binaries:**
+- `~/.local/bin/org-mcp-server`
+- `~/.local/bin/org-cli`
+
+### Cargo Build
 
 - `cargo build` — Build all crates
 - `cargo test` — Run all tests
@@ -86,9 +118,60 @@ Run `just` to see all available commands with descriptions.
 
 ## Current Implementation Status
 
+### Upstream Features (v0.0.4)
 - ✅ Basic file listing with recursive directory traversal
 - ✅ Error handling with custom types and proper chaining
-- ✅ CLI tool with `list` and `init` commands
+- ✅ CLI tool with `list`, `outline`, `search`, `agenda` commands
 - ✅ MCP server with JSON-RPC protocol
-- 🚧 Org-mode parsing and content extraction (planned)
-- 🚧 Search functionality with metadata caching (planned)
+- ✅ Org-mode parsing (orgize 0.10.0-alpha.10)
+- ✅ Full-text search with nucleo-matcher
+- ✅ Tag-based filtering
+- ✅ Agenda functionality
+
+### Our Improvements (ko branch)
+
+**Phase 1: Line Number Support** ✅ DONE (2025-11-22)
+- ✅ TreeNode에 `line_number`, `line_end` 추가
+- ✅ `get_outline()` 함수에서 headline position 추출
+- ✅ `byte_offset_to_line_number()` 헬퍼 함수
+- ✅ 테스트 검증 완료 (2140+ files)
+
+**Key Changes:**
+- File: `org-core/src/org_mode.rs`
+- Lines: 58-70 (TreeNode struct), 336-343 (helper), 349-405 (get_outline)
+- Commit: `16213e8`
+
+**Phase 1.5: Performance Testing** 🚧 NEXT
+- [ ] Benchmark with 2140+ org files
+- [ ] PERFORMANCE-ko.md documentation
+- [ ] rayon parallel search
+- [ ] Upstream PR preparation
+
+**Phase 2: Denote Support** 📝 PLANNED
+- [ ] Filename parsing: `YYYYMMDDTHHMMSS--title__tags.org`
+- [ ] Frontmatter parsing: `#+identifier:`, `#+filetags:`
+- [ ] denote-list MCP tool
+- [ ] denote://{id} resource
+
+**Phase 3: Multi-Silo Support** 📝 PLANNED
+- [ ] Multiple directory configuration
+- [ ] Auto-discovery: `~/repos/*/docs`
+- [ ] Unified search across silos
+
+### Performance Goals
+
+**Target (2140+ files):**
+- File list: < 100ms
+- Outline extraction: < 3s
+- Full-text search: < 1s
+
+**Planned Optimizations:**
+- rayon parallel processing (3-5x improvement)
+- DashMap caching (10x+ for repeated searches)
+- RwLock for concurrent reads
+
+## Key Documentation
+
+- **STRATEGY-ko.md** — Project analysis and contribution strategy
+- **inbox__human.org** — TODO tracking and next steps
+- **README.md** — Original project documentation
