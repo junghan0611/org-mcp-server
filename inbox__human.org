@@ -1,0 +1,240 @@
+#+title: org-mcp-server 개선 작업
+#+date: [2025-11-22 Fri]
+#+filetags: :improvement:denote:
+
+* DONE Phase 1: TreeNode에 Line Number 추가
+CLOSED: [2025-11-22 Fri 20:30]
+
+** 완료 상황
+- ✅ TreeNode 구조체 수정 (line_number, line_end 추가)
+- ✅ get_outline() 함수 수정 (headline.start()/end() 사용)
+- ✅ byte_offset_to_line_number() 헬퍼 함수 추가
+- ✅ 빌드 성공
+- ✅ 테스트 검증 완료
+
+** 발견 사항
+- 원저자: Sebastian Zaffarano (Elastic, Neovim 사용자)
+- nvim-orgmode + org-roam.nvim + nvim-mcp 사용
+- 2140개 org 파일 확인 (~/org/notes, meta, bib, llmlog)
+
+** 다음 작업
+- [ ] 성능 벤치마크 (2140개 파일)
+- [ ] PERFORMANCE-ko.md 문서화
+- [ ] 테스트 코드 작성
+
+* TODO Phase 1.5: 성능 테스트 및 문서화
+
+** 목표
+- 2140개 org 파일로 실제 성능 측정
+- 병렬 처리 개선 (rayon)
+- 벤치마크 문서화
+
+** 작업 항목
+- [ ] org-cli 성능 벤치마크
+  - list 명령어 (2140개 파일)
+  - outline 명령어 (line number 포함)
+  - search 명령어
+- [ ] PERFORMANCE-ko.md 작성
+- [ ] 성능 개선 PR 준비
+
+* TODO Phase 1: TreeNode에 Line Number 추가 (원본)
+
+** 목표
+Agent가 org-mode 파일의 heading 위치를 정확히 알 수 있도록 개선
+
+** 현재 문제
+- TreeNode에 line_number 정보 없음
+- Agent가 grep이나 100줄 읽기로 비효율적으로 파일 탐색
+- org-mode의 계층 구조를 활용하지 못함
+
+** 구현 내용
+
+*** TreeNode 구조체 수정
+파일: =org-core/src/org_mode.rs:58-66=
+
+#+begin_src rust
+pub struct TreeNode {
+    pub label: String,
+    pub level: usize,
+    pub children: Vec<TreeNode>,
+    pub tags: Vec<String>,
+    pub line_number: Option<usize>,  // ← 추가!
+    pub line_end: Option<usize>,     // ← 선택적
+}
+#+end_src
+
+*** get_outline() 함수 수정
+파일: =org-core/src/org_mode.rs:332-377=
+
+1. orgize 파서에서 각 heading의 byte offset 추출
+2. byte offset을 line number로 변환
+3. TreeNode에 line_number 할당
+
+** 예상 결과
+
+CLI:
+#+begin_src bash
+org outline ~/org/myfile.org --format json
+#+end_src
+
+JSON 출력:
+#+begin_src json
+{
+  "label": "Introduction",
+  "level": 1,
+  "line_number": 5,
+  "line_end": 20,
+  "tags": []
+}
+#+end_src
+
+** Agent 활용 시나리오
+
+1. 파일 구조 파악: =org-outline://research.org=
+2. 원하는 섹션 찾기: "** Methodology" → line 50
+3. 해당 라인부터 읽기: =Read research.org offset=50=
+
+* TODO Phase 2: Denote 파일명 규칙 지원
+
+** 목표
+Denote 파일명과 frontmatter를 파싱하여 메타데이터 제공
+
+** Denote 파일명 규칙
+
+#+begin_example
+YYYYMMDDTHHMMSS--title__tags.org
+20250907T135000--ai-대화-세션__laptop_active.org
+#+end_example
+
+구성:
+- =YYYYMMDDTHHMMSS= :: 고유 식별자
+- =title= :: 한글 제목
+- =tags= :: 영어 태그
+
+** Denote Frontmatter
+
+#+begin_src org
+,#+title:      제목
+,#+date:       [2025-10-20 Mon 00:00]
+,#+filetags:   :tag1:tag2:
+,#+identifier: 20250926T130000
+#+end_src
+
+** 구현 내용
+
+*** DenoteMetadata 구조체
+파일: =org-core/src/denote.rs= (새 파일)
+
+#+begin_src rust
+pub struct DenoteMetadata {
+    pub identifier: String,
+    pub title: String,
+    pub tags: Vec<String>,
+    pub frontmatter: OrgFrontmatter,
+}
+
+pub struct OrgFrontmatter {
+    pub title: Option<String>,
+    pub date: Option<String>,
+    pub filetags: Vec<String>,
+    pub identifier: Option<String>,
+}
+#+end_src
+
+*** 파일명 파싱
+정규표현식: =^(\d{8}T\d{6})--([^_]+)__([^.]+)\.org$=
+
+*** Frontmatter 파싱
+orgize 파서로 =#+title:=, =#+filetags:= 등 추출
+
+** MCP Tool 추가
+
+*** denote-list
+#+begin_src json
+{
+  "name": "denote-list",
+  "inputSchema": {
+    "tags": ["tag1"],
+    "after": "20250101T000000"
+  }
+}
+#+end_src
+
+*** denote://{identifier}
+#+begin_example
+denote://20250907T135000
+#+end_example
+
+* TODO Phase 3: Silo(다중 저장소) 지원
+
+** 목표
+여러 디렉토리를 독립적인 Silo로 관리하고 통합 검색
+
+** 참고
+denote-silo-dynamic.el (~/repos/gh/doomemacs-config/+denote-silo-dynamic.el)
+- DB 없이 파일명+디렉토리로 관리
+- Git 저장소 =docs= 디렉토리 자동 발견
+- 모든 Silo 통합 검색
+
+** 구현 내용
+
+*** Config 확장
+파일: =org-core/src/config.rs=
+
+#+begin_src rust
+pub struct Config {
+    pub silo_directories: Vec<PathBuf>,     // 명시적 Silo
+    pub silo_repos_roots: Vec<PathBuf>,     // 자동 발견 루트
+    pub silo_auto_discover: bool,
+}
+#+end_src
+
+*** Silo 자동 발견
+#+begin_src rust
+pub fn discover_silos(repos_roots: &[PathBuf]) -> Vec<PathBuf> {
+    // ~/repos/gh/*/docs 탐색
+    // Git 저장소 확인
+    // docs 디렉토리 존재 확인
+}
+#+end_src
+
+*** 통합 검색
+#+begin_src rust
+pub fn search_all_silos(
+    silos: &[PathBuf],
+    query: &str
+) -> Vec<SearchResult>
+#+end_src
+
+** 예상 Config
+
+=~/.config/org-mcp-server/config.toml=:
+#+begin_src toml
+silo_directories = [
+  "~/org",
+  "~/claude-memory",
+  "~/org/llmlog"
+]
+
+silo_repos_roots = [
+  "~/repos/gh",
+  "~/repos/work"
+]
+
+silo_auto_discover = true
+#+end_src
+
+** MCP Tool 확장
+
+검색 결과에 Silo 정보 포함:
+#+begin_src json
+{
+  "results": [
+    {
+      "silo": "org",
+      "file": "notes/research.org",
+      "line": 42
+    }
+  ]
+}
+#+end_src

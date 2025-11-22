@@ -63,6 +63,10 @@ pub struct TreeNode {
     pub children: Vec<TreeNode>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub tags: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line_number: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line_end: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -147,6 +151,8 @@ impl TreeNode {
             level: 0,
             children: Vec::new(),
             tags: Vec::new(),
+            line_number: None,
+            line_end: None,
         }
     }
 
@@ -156,6 +162,8 @@ impl TreeNode {
             level,
             children: Vec::new(),
             tags: Vec::new(),
+            line_number: None,
+            line_end: None,
         }
     }
 
@@ -329,22 +337,42 @@ impl OrgMode {
         fs::read_to_string(full_path).map_err(OrgModeError::IoError)
     }
 
+    /// Convert byte offset to line number (1-indexed)
+    fn byte_offset_to_line_number(content: &str, byte_offset: usize) -> usize {
+        content[..byte_offset.min(content.len())]
+            .chars()
+            .filter(|&c| c == '\n')
+            .count()
+            + 1
+    }
+
     pub fn get_outline(&self, path: &str) -> Result<TreeNode, OrgModeError> {
         let content = self.read_file(path)?;
+        let org = Org::parse(&content);
 
         let mut root = TreeNode::new("Document".into());
         let mut stack: Vec<TreeNode> = Vec::new();
 
         let mut handler = from_fn(|event| {
-            if let Event::Enter(Container::Headline(h)) = event {
-                let level = h.level();
-                let label = h.title_raw();
-                let tags = h.tags().map(|s| s.to_string()).collect();
+            if let Event::Enter(Container::Headline(headline)) = event {
+                let level = headline.level();
+                let label = headline.title_raw();
+                let tags = headline.tags().map(|s| s.to_string()).collect();
+
+                // Get position information (same pattern as headline_to_agenda_item:836-837)
+                let start_offset: usize = headline.start().into();
+                let end_offset: usize = headline.end().into();
+
+                let line_number = Some(Self::byte_offset_to_line_number(&content, start_offset));
+                let line_end = Some(Self::byte_offset_to_line_number(&content, end_offset));
+
                 let node = TreeNode {
                     label,
                     level,
                     tags,
                     children: Vec::new(),
+                    line_number,
+                    line_end,
                 };
 
                 while let Some(n) = stack.last() {
@@ -363,7 +391,7 @@ impl OrgMode {
             }
         });
 
-        Org::parse(&content).traverse(&mut handler);
+        org.traverse(&mut handler);
 
         while let Some(node) = stack.pop() {
             if let Some(parent) = stack.last_mut() {
