@@ -108,6 +108,43 @@ Run `just` to see all available commands with descriptions.
 1. **File operations**: Validate paths at construction, not runtime
 1. **Testing**: Create fixtures for complex org-mode files
 
+## Issue Tracking: bd (beads)
+
+이 프로젝트는 **bd (beads)** 로 이슈를 관리합니다. TodoWrite 대신 bd를 사용하세요.
+
+### 기본 명령어
+
+```bash
+bd list                          # 모든 이슈 보기
+bd ready                         # 작업 가능한 이슈 보기
+bd create "제목" -t bug -p 1     # 이슈 생성 (type: bug/task/feature, priority: 1-5)
+bd update <id> --status in_progress  # 작업 시작
+bd close <id> --reason "완료"    # 이슈 종료
+bd sync                          # Git과 동기화
+```
+
+### 워크플로우
+
+1. `bd ready` → 작업할 이슈 선택
+2. `bd update <id> --status in_progress` → 작업 시작
+3. 코드 수정 및 테스트
+4. `bd close <id> --reason "구현 완료"` → 이슈 종료
+5. `bd sync` → Git 커밋/푸시
+
+### 이슈 타입
+
+- `bug` — 버그 수정
+- `task` — 일반 작업
+- `feature` — 새 기능
+
+### 우선순위
+
+- `1` — Critical (즉시)
+- `2` — High (이번 주)
+- `3` — Medium (이번 달)
+- `4` — Low (나중에)
+- `5` — Backlog
+
 ## Behavioral Guidelines
 
 - **Concise responses**: Be direct, avoid unnecessary explanations
@@ -115,6 +152,7 @@ Run `just` to see all available commands with descriptions.
 - **Commits**: Always sign with -S, never include Claude Code references
 - **Code quality**: Run clippy and fmt before suggesting changes
 - **Documentation**: Only create when explicitly requested
+- **Issue tracking**: Use `bd` commands, NOT TodoWrite
 
 ## Current Implementation Status
 
