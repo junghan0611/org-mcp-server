@@ -20,7 +20,7 @@ defaults:
 jobs:
   upload-assets:
     name: ${{ matrix.target }}
-    if: github.repository_owner == 'szaffarano' && (startsWith(github.event.release.name, 'org-mcp-server-v') || startsWith(github.event.release.name, 'org-cli-v'))
+    if: startsWith(github.event.release.name, 'org-mcp-server-v') || startsWith(github.event.release.name, 'org-cli-v')
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
