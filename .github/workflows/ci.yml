@@ -1,9 +1,9 @@
 name: CI
 on:
   pull_request:
-    branches: [master]
+    branches: [master, ko]
   push:
-    branches: [master]
+    branches: [master, ko]
 env:
   CARGO_TERM_COLOR: always
 jobs:
