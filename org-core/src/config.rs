@@ -13,6 +13,14 @@ use shellexpand::tilde;
 pub struct OrgConfig {
     #[serde(default = "default_org_directory")]
     pub org_directory: String,
+    /// Additional directories to search (silos)
+    /// These are searched in addition to org_directory
+    #[serde(default)]
+    pub org_extra_directories: Vec<String>,
+    /// Repository roots for auto-discovery of docs directories
+    /// e.g., ["~/repos/gh", "~/repos/work"]
+    #[serde(default)]
+    pub org_silo_roots: Vec<String>,
     #[serde(default = "default_notes_file")]
     pub org_default_notes_file: String,
     #[serde(default = "default_agenda_files")]
@@ -36,6 +44,8 @@ impl Default for OrgConfig {
     fn default() -> Self {
         Self {
             org_directory: default_org_directory(),
+            org_extra_directories: Vec::default(),
+            org_silo_roots: Vec::default(),
             org_default_notes_file: default_notes_file(),
             org_agenda_files: default_agenda_files(),
             org_agenda_text_search_extra_files: Vec::default(),
@@ -139,6 +149,61 @@ impl OrgConfig {
                 .map(|e| vec![e.clone()])
                 .unwrap_or_default()
         }
+    }
+
+    /// Get all directories to search (primary + extra silos + discovered)
+    pub fn all_directories(&self) -> Vec<String> {
+        let mut dirs = vec![self.org_directory.clone()];
+        dirs.extend(self.org_extra_directories.clone());
+        // Add discovered repo docs directories
+        dirs.extend(self.discover_repo_docs());
+        dirs
+    }
+
+    /// Get expanded paths for all directories
+    pub fn all_directories_expanded(&self) -> Vec<PathBuf> {
+        self.all_directories()
+            .into_iter()
+            .map(|d| PathBuf::from(tilde(&d).into_owned()))
+            .filter(|p| p.exists() && p.is_dir())
+            .collect()
+    }
+
+    /// Discover docs directories in repository roots
+    /// Similar to denote-silo-discover-repo-docs in Emacs
+    pub fn discover_repo_docs(&self) -> Vec<String> {
+        let mut docs_dirs = Vec::new();
+
+        for root in &self.org_silo_roots {
+            let expanded_root = PathBuf::from(tilde(root).into_owned());
+            if !expanded_root.exists() || !expanded_root.is_dir() {
+                continue;
+            }
+
+            // Iterate through subdirectories
+            if let Ok(entries) = fs::read_dir(&expanded_root) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let repo_path = entry.path();
+                    // Resolve symlinks
+                    let real_path = repo_path.canonicalize().unwrap_or(repo_path.clone());
+
+                    // Check if it's a git repository
+                    if !real_path.join(".git").exists() {
+                        continue;
+                    }
+
+                    // Check if docs directory exists
+                    let docs_path = real_path.join("docs");
+                    if docs_path.exists() && docs_path.is_dir() {
+                        if let Some(path_str) = docs_path.to_str() {
+                            docs_dirs.push(path_str.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        docs_dirs
     }
 }
 
@@ -741,5 +806,60 @@ file = "/var/log/test.log"
 
         let result = config.validate();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_all_directories() {
+        let temp_dir = tempdir().unwrap();
+        let extra_dir = tempdir().unwrap();
+
+        let config = OrgConfig {
+            org_directory: temp_dir.path().to_str().unwrap().to_string(),
+            org_extra_directories: vec![extra_dir.path().to_str().unwrap().to_string()],
+            ..OrgConfig::default()
+        };
+
+        let dirs = config.all_directories();
+        assert!(dirs.len() >= 2);
+        assert!(dirs.contains(&temp_dir.path().to_str().unwrap().to_string()));
+        assert!(dirs.contains(&extra_dir.path().to_str().unwrap().to_string()));
+    }
+
+    #[test]
+    fn test_all_directories_expanded_filters_nonexistent() {
+        let temp_dir = tempdir().unwrap();
+
+        let config = OrgConfig {
+            org_directory: temp_dir.path().to_str().unwrap().to_string(),
+            org_extra_directories: vec!["/nonexistent/path".to_string()],
+            ..OrgConfig::default()
+        };
+
+        let expanded = config.all_directories_expanded();
+        // Should only contain the temp_dir, not the nonexistent path
+        assert_eq!(expanded.len(), 1);
+        assert_eq!(expanded[0], temp_dir.path());
+    }
+
+    #[test]
+    fn test_discover_repo_docs_empty_roots() {
+        let config = OrgConfig {
+            org_silo_roots: vec![],
+            ..OrgConfig::default()
+        };
+
+        let discovered = config.discover_repo_docs();
+        assert!(discovered.is_empty());
+    }
+
+    #[test]
+    fn test_discover_repo_docs_nonexistent_root() {
+        let config = OrgConfig {
+            org_silo_roots: vec!["/nonexistent/repos/root".to_string()],
+            ..OrgConfig::default()
+        };
+
+        let discovered = config.discover_repo_docs();
+        assert!(discovered.is_empty());
     }
 }

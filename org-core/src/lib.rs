@@ -1,4 +1,5 @@
 pub mod config;
+pub mod denote;
 pub mod error;
 pub mod org_mode;
 pub mod utils;
@@ -7,5 +8,6 @@ pub mod utils;
 mod error_tests;
 
 pub use config::{LoggingConfig, OrgConfig};
+pub use denote::DenoteFile;
 pub use error::OrgModeError;
-pub use org_mode::{AgendaItem, AgendaView, OrgMode, Priority, TodoState};
+pub use org_mode::{AgendaItem, AgendaView, OrgMode, Priority, SiloFile, TodoState};

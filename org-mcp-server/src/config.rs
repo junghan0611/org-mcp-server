@@ -183,6 +183,8 @@ max_connections = 5
         let config = ServerAppConfig {
             org: OrgConfig {
                 org_directory: config_dir.path().to_str().unwrap().to_string(),
+                org_extra_directories: vec![],
+                org_silo_roots: vec![],
                 org_default_notes_file: "test.org".to_string(),
                 org_agenda_files: vec!["agenda.org".to_string()],
                 org_agenda_text_search_extra_files: vec![],

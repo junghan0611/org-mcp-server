@@ -161,9 +161,13 @@ YYYYMMDDTHHMMSS--title__tags.org
 ### 우리의 기여 (ko 브랜치)
 
 **완료:**
-- ✅ Phase 1: Line Number 추가 (363-367번째 줄)
+- ✅ Phase 1: Line Number 추가 (16213e8)
   - AI Agent 효율성 극대화
   - Neovim 점프 기능 지원 가능
+- ✅ Phase 1.5: `#+filetags:` 파싱 지원 (ac07106)
+  - `tags_in_file()` 함수에서 문서 레벨 태그 파싱
+  - 대소문자 모두 지원 (`#+filetags:`, `#+FILETAGS:`)
+  - 콜론 구분 태그 파싱 (`:tag1:tag2:` → `["tag1", "tag2"]`)
 
 **계획 (PR 가능성 높음):**
 
@@ -195,8 +199,9 @@ criterion::benchmark_group!(
 
 **3. Denote 지원**
 - 파일명 파싱
-- frontmatter (#+identifier:, #+filetags:)
+- frontmatter (#+identifier:)
 - denote 기반 필터링
+- ✅ `#+filetags:` 파싱 완료
 
 **4. Silo 관리**
 - 여러 디렉토리 통합
@@ -232,8 +237,9 @@ criterion::benchmark_group!(
    - [ ] search 성능
 
 3. **커밋 정리**
-   - [ ] Phase 1 완료 커밋
-   - [ ] ko 브랜치 push
+   - [x] Phase 1 완료 커밋 (16213e8)
+   - [x] filetags 파싱 완료 커밋 (ac07106)
+   - [x] ko 브랜치 push
 
 ### 중기 (1-2주)
 
@@ -307,7 +313,8 @@ criterion::benchmark_group!(
 
 우리의 기여:
 1. ✅ Line Number - AI 에이전트와 Neovim 모두에게 유용
-2. 🎯 성능 최적화 - 원저자의 핵심 관심사
-3. 🎯 Denote 지원 - 범용성 확대
+2. ✅ `#+filetags:` 파싱 - Denote/org-roam 호환성
+3. 🎯 성능 최적화 - 원저자의 핵심 관심사
+4. 🎯 Denote 지원 - 범용성 확대
 
 **Win-Win 협업 가능성이 매우 높습니다!**

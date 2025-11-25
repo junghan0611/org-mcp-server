@@ -729,3 +729,165 @@ fn test_read_file_directory_error() {
         );
     }
 }
+
+// ============================================================================
+// Multi-Silo Tests
+// ============================================================================
+
+#[test]
+fn test_list_files_all_silos_basic() {
+    let org_dir = fixtures::setup_test_org_files().unwrap();
+    let extra_dir = fixtures::setup_test_org_files().unwrap();
+
+    let config = OrgConfig {
+        org_directory: org_dir.path().to_str().unwrap().to_string(),
+        org_extra_directories: vec![extra_dir.path().to_str().unwrap().to_string()],
+        ..OrgConfig::default()
+    };
+
+    let org_mode = OrgMode::new(config).unwrap();
+    let files = org_mode.list_files_all_silos(None, None).unwrap();
+
+    // Should find files from both directories
+    assert!(!files.is_empty());
+
+    // Verify SiloFile structure
+    for file in &files {
+        assert!(!file.absolute_path.is_empty());
+        assert!(!file.relative_path.is_empty());
+        assert!(!file.silo_name.is_empty());
+        assert!(!file.silo_path.is_empty());
+    }
+}
+
+#[test]
+fn test_list_files_all_silos_with_limit() {
+    let org_dir = fixtures::setup_test_org_files().unwrap();
+
+    let config = OrgConfig {
+        org_directory: org_dir.path().to_str().unwrap().to_string(),
+        ..OrgConfig::default()
+    };
+
+    let org_mode = OrgMode::new(config).unwrap();
+    let files = org_mode.list_files_all_silos(None, Some(3)).unwrap();
+
+    assert!(files.len() <= 3);
+}
+
+#[test]
+fn test_list_files_all_silos_denote_parsing() {
+    use tempfile::TempDir;
+    use std::fs;
+
+    let temp_dir = TempDir::new().unwrap();
+
+    // Create a Denote-style filename
+    let denote_file = temp_dir.path().join("20231128T233500--test-note__emacs_rust.org");
+    fs::write(&denote_file, "* Test Heading\nSome content").unwrap();
+
+    let config = OrgConfig {
+        org_directory: temp_dir.path().to_str().unwrap().to_string(),
+        ..OrgConfig::default()
+    };
+
+    let org_mode = OrgMode::new(config).unwrap();
+    let files = org_mode.list_files_all_silos(None, None).unwrap();
+
+    assert_eq!(files.len(), 1);
+    let file = &files[0];
+
+    // Should have parsed Denote metadata
+    assert!(file.denote.is_some());
+    let denote = file.denote.as_ref().unwrap();
+    assert_eq!(denote.identifier, "20231128T233500");
+    assert_eq!(denote.title, "test-note");
+    assert_eq!(denote.tags, vec!["emacs", "rust"]);
+}
+
+#[test]
+fn test_list_files_all_silos_silo_name_format() {
+    use tempfile::TempDir;
+    use std::fs;
+
+    // Create a structure like ~/repos/gh/myproject/docs
+    let temp_root = TempDir::new().unwrap();
+    let repo_dir = temp_root.path().join("myproject");
+    let docs_dir = repo_dir.join("docs");
+    fs::create_dir_all(&docs_dir).unwrap();
+
+    // Create .git directory to make it a "repo"
+    fs::create_dir(repo_dir.join(".git")).unwrap();
+
+    // Create an org file in docs
+    fs::write(docs_dir.join("readme.org"), "* README\nProject docs").unwrap();
+
+    let config = OrgConfig {
+        org_directory: docs_dir.to_str().unwrap().to_string(),
+        ..OrgConfig::default()
+    };
+
+    let org_mode = OrgMode::new(config).unwrap();
+    let files = org_mode.list_files_all_silos(None, None).unwrap();
+
+    assert_eq!(files.len(), 1);
+    let file = &files[0];
+
+    // Silo name should be "myproject/docs"
+    assert_eq!(file.silo_name, "myproject/docs");
+}
+
+#[test]
+fn test_discover_repo_docs_integration() {
+    use tempfile::TempDir;
+    use std::fs;
+
+    // Create a mock repos structure
+    let temp_root = TempDir::new().unwrap();
+
+    // Create repo1 with docs
+    let repo1 = temp_root.path().join("repo1");
+    let docs1 = repo1.join("docs");
+    fs::create_dir_all(&docs1).unwrap();
+    fs::create_dir(repo1.join(".git")).unwrap();
+    fs::write(docs1.join("doc1.org"), "* Doc 1").unwrap();
+
+    // Create repo2 with docs
+    let repo2 = temp_root.path().join("repo2");
+    let docs2 = repo2.join("docs");
+    fs::create_dir_all(&docs2).unwrap();
+    fs::create_dir(repo2.join(".git")).unwrap();
+    fs::write(docs2.join("doc2.org"), "* Doc 2").unwrap();
+
+    // Create repo3 WITHOUT docs (should be ignored)
+    let repo3 = temp_root.path().join("repo3");
+    fs::create_dir_all(&repo3).unwrap();
+    fs::create_dir(repo3.join(".git")).unwrap();
+    fs::write(repo3.join("readme.org"), "* Readme").unwrap();
+
+    // Create a primary org directory
+    let org_dir = TempDir::new().unwrap();
+    fs::write(org_dir.path().join("notes.org"), "* Notes").unwrap();
+
+    let config = OrgConfig {
+        org_directory: org_dir.path().to_str().unwrap().to_string(),
+        org_silo_roots: vec![temp_root.path().to_str().unwrap().to_string()],
+        ..OrgConfig::default()
+    };
+
+    // Test discover_repo_docs
+    let discovered = config.discover_repo_docs();
+    assert_eq!(discovered.len(), 2, "Should discover 2 repo docs directories");
+
+    // Test list_files_all_silos includes discovered repos
+    let org_mode = OrgMode::new(config).unwrap();
+    let files = org_mode.list_files_all_silos(None, None).unwrap();
+
+    // Should find: notes.org + doc1.org + doc2.org = 3 files
+    assert_eq!(files.len(), 3, "Should find files from primary + discovered silos");
+
+    // Verify silo names
+    let silo_names: Vec<&str> = files.iter().map(|f| f.silo_name.as_str()).collect();
+    assert!(silo_names.iter().any(|n| n.contains("repo1")));
+    assert!(silo_names.iter().any(|n| n.contains("repo2")));
+}

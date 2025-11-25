@@ -78,6 +78,53 @@ pub struct SearchResult {
     pub tags: Vec<String>,
 }
 
+/// File information from a silo
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SiloFile {
+    /// Absolute path to the file
+    pub absolute_path: String,
+    /// Path relative to the silo root
+    pub relative_path: String,
+    /// Human-readable silo name (e.g., "org/notes", "myproject/docs")
+    pub silo_name: String,
+    /// Absolute path of the silo directory
+    pub silo_path: String,
+    /// Denote metadata if the file follows Denote naming convention
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub denote: Option<crate::denote::DenoteFile>,
+}
+
+/// Format silo path to human-readable name
+/// e.g., "/home/user/org/notes" -> "org/notes"
+/// e.g., "/home/user/repos/gh/myproject/docs" -> "myproject/docs"
+fn format_silo_name(path: &std::path::Path) -> String {
+    let path_str = path.to_string_lossy();
+
+    // Check for docs directory pattern
+    if path_str.ends_with("/docs") {
+        if let Some(parent) = path.parent() {
+            if let Some(repo_name) = parent.file_name() {
+                return format!("{}/docs", repo_name.to_string_lossy());
+            }
+        }
+    }
+
+    // Check for org subdirectory pattern
+    if let Some(pos) = path_str.find("/org/") {
+        return path_str[pos + 1..].to_string();
+    }
+
+    // Check for claude-memory pattern
+    if let Some(pos) = path_str.find("/claude-memory") {
+        return path_str[pos + 1..].to_string();
+    }
+
+    // Default: last component
+    path.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| path_str.to_string())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TodoState {
     Todo,
@@ -240,6 +287,105 @@ impl OrgMode {
                     .take(limit.unwrap_or(usize::MAX))
                     .collect::<Vec<String>>()
             })
+    }
+
+    /// List files from all silos (primary directory + extra directories + discovered repos)
+    /// Returns absolute paths with silo prefix for identification
+    pub fn list_files_all_silos(
+        &self,
+        tags: Option<&[String]>,
+        limit: Option<usize>,
+    ) -> Result<Vec<SiloFile>, OrgModeError> {
+        use crate::denote::DenoteFile;
+
+        let directories = self.config.all_directories_expanded();
+        let mut all_files = Vec::new();
+
+        for dir in directories {
+            let dir_str = dir.to_string_lossy().to_string();
+            let silo_name = format_silo_name(&dir);
+
+            let walker = Walk::new(&dir);
+            for entry in walker.filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if path.is_file()
+                    && path.extension().map(|e| e == "org").unwrap_or(false)
+                {
+                    let abs_path = path.to_string_lossy().to_string();
+                    let relative_path = path
+                        .strip_prefix(&dir)
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|_| abs_path.clone());
+
+                    // Parse Denote metadata if applicable
+                    let denote = DenoteFile::parse(&abs_path);
+
+                    let silo_file = SiloFile {
+                        absolute_path: abs_path,
+                        relative_path,
+                        silo_name: silo_name.clone(),
+                        silo_path: dir_str.clone(),
+                        denote,
+                    };
+
+                    // Filter by tags if specified
+                    if let Some(tags) = tags {
+                        let file_tags = self.tags_in_file_abs(&silo_file.absolute_path)
+                            .unwrap_or_default();
+                        if !tags.iter().any(|t| file_tags.contains(t)) {
+                            continue;
+                        }
+                    }
+
+                    all_files.push(silo_file);
+
+                    if let Some(lim) = limit {
+                        if all_files.len() >= lim {
+                            return Ok(all_files);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(all_files)
+    }
+
+    /// Get tags from file using absolute path
+    fn tags_in_file_abs(&self, abs_path: &str) -> Result<Vec<String>, OrgModeError> {
+        let content = std::fs::read_to_string(abs_path)
+            .map_err(|e| OrgModeError::IoError(e))?;
+        let mut tags = Vec::new();
+
+        // Parse #+filetags: from document header
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("#+filetags:") || trimmed.starts_with("#+FILETAGS:") {
+                if let Some(value) = trimmed.split_once(':').map(|(_, v)| v.trim()) {
+                    tags.extend(
+                        value
+                            .split(':')
+                            .filter(|s| !s.is_empty())
+                            .map(|s| s.to_string()),
+                    );
+                }
+                break;
+            }
+            if trimmed.starts_with('*') {
+                break;
+            }
+        }
+
+        // Also collect headline tags
+        let mut handler = from_fn(|event| {
+            if let Event::Enter(Container::Headline(h)) = event {
+                tags.extend(h.tags().map(|s| s.to_string()));
+            }
+        });
+
+        Org::parse(&content).traverse(&mut handler);
+
+        Ok(tags)
     }
 
     pub fn search(
