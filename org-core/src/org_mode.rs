@@ -492,6 +492,28 @@ impl OrgMode {
         let content = self.read_file(path)?;
         let mut tags = Vec::new();
 
+        // Parse #+filetags: from document header (e.g., "#+filetags: :tag1:tag2:")
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("#+filetags:") || trimmed.starts_with("#+FILETAGS:") {
+                if let Some(value) = trimmed.split_once(':').map(|(_, v)| v.trim()) {
+                    // Parse colon-separated tags: ":tag1:tag2:" -> ["tag1", "tag2"]
+                    tags.extend(
+                        value
+                            .split(':')
+                            .filter(|s| !s.is_empty())
+                            .map(|s| s.to_string()),
+                    );
+                }
+                break; // Only parse first #+filetags: line
+            }
+            // Stop searching after first headline (filetags must be in document header)
+            if trimmed.starts_with('*') {
+                break;
+            }
+        }
+
+        // Also collect headline tags
         let mut handler = from_fn(|event| {
             if let Event::Enter(Container::Headline(h)) = event {
                 tags.extend(h.tags().map(|s| s.to_string()));

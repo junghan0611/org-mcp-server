@@ -1,5 +1,6 @@
 #+TITLE: Tagged Content
 #+DATE: 2024-01-10
+#+filetags: :project:documentation:
 
 * Work Task :work:urgent:
 Important work-related task that needs attention.
