@@ -194,10 +194,11 @@ impl OrgConfig {
 
                     // Check if docs directory exists
                     let docs_path = real_path.join("docs");
-                    if docs_path.exists() && docs_path.is_dir() {
-                        if let Some(path_str) = docs_path.to_str() {
-                            docs_dirs.push(path_str.to_string());
-                        }
+                    if docs_path.exists()
+                        && docs_path.is_dir()
+                        && let Some(path_str) = docs_path.to_str()
+                    {
+                        docs_dirs.push(path_str.to_string());
                     }
                 }
             }

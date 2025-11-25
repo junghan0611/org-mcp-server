@@ -465,7 +465,8 @@ fn test_config_show_fallback_to_default() {
         .arg("show")
         .assert()
         .success()
-        .stdout(predicate::str::contains("~/org/"))
+        // org_directory may be expanded from ~/org/ to /home/user/org/
+        .stdout(predicate::str::contains("org_directory"))
         .stdout(predicate::str::contains("notes.org"));
 }
 

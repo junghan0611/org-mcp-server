@@ -39,9 +39,7 @@ impl DenoteFile {
     /// Returns `None` if the filename doesn't match Denote format
     pub fn parse(filename: &str) -> Option<Self> {
         // Extract base name (without directory path)
-        let base_name = std::path::Path::new(filename)
-            .file_name()?
-            .to_str()?;
+        let base_name = std::path::Path::new(filename).file_name()?.to_str()?;
 
         // Must have extension
         let (name_without_ext, extension) = base_name.rsplit_once('.')?;

@@ -101,12 +101,11 @@ fn format_silo_name(path: &std::path::Path) -> String {
     let path_str = path.to_string_lossy();
 
     // Check for docs directory pattern
-    if path_str.ends_with("/docs") {
-        if let Some(parent) = path.parent() {
-            if let Some(repo_name) = parent.file_name() {
-                return format!("{}/docs", repo_name.to_string_lossy());
-            }
-        }
+    if path_str.ends_with("/docs")
+        && let Some(parent) = path.parent()
+        && let Some(repo_name) = parent.file_name()
+    {
+        return format!("{}/docs", repo_name.to_string_lossy());
     }
 
     // Check for org subdirectory pattern
@@ -308,9 +307,7 @@ impl OrgMode {
             let walker = Walk::new(&dir);
             for entry in walker.filter_map(|e| e.ok()) {
                 let path = entry.path();
-                if path.is_file()
-                    && path.extension().map(|e| e == "org").unwrap_or(false)
-                {
+                if path.is_file() && path.extension().map(|e| e == "org").unwrap_or(false) {
                     let abs_path = path.to_string_lossy().to_string();
                     let relative_path = path
                         .strip_prefix(&dir)
@@ -330,7 +327,8 @@ impl OrgMode {
 
                     // Filter by tags if specified
                     if let Some(tags) = tags {
-                        let file_tags = self.tags_in_file_abs(&silo_file.absolute_path)
+                        let file_tags = self
+                            .tags_in_file_abs(&silo_file.absolute_path)
                             .unwrap_or_default();
                         if !tags.iter().any(|t| file_tags.contains(t)) {
                             continue;
@@ -339,10 +337,10 @@ impl OrgMode {
 
                     all_files.push(silo_file);
 
-                    if let Some(lim) = limit {
-                        if all_files.len() >= lim {
-                            return Ok(all_files);
-                        }
+                    if let Some(lim) = limit
+                        && all_files.len() >= lim
+                    {
+                        return Ok(all_files);
                     }
                 }
             }
@@ -353,8 +351,7 @@ impl OrgMode {
 
     /// Get tags from file using absolute path
     fn tags_in_file_abs(&self, abs_path: &str) -> Result<Vec<String>, OrgModeError> {
-        let content = std::fs::read_to_string(abs_path)
-            .map_err(|e| OrgModeError::IoError(e))?;
+        let content = std::fs::read_to_string(abs_path).map_err(OrgModeError::IoError)?;
         let mut tags = Vec::new();
 
         // Parse #+filetags: from document header

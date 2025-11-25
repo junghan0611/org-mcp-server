@@ -35,7 +35,10 @@ fn main() {
     let mut by_silo: std::collections::HashMap<String, Vec<_>> = std::collections::HashMap::new();
     for file in files {
         if !file.silo_name.starts_with("org") {
-            by_silo.entry(file.silo_name.clone()).or_default().push(file);
+            by_silo
+                .entry(file.silo_name.clone())
+                .or_default()
+                .push(file);
         }
     }
 

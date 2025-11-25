@@ -777,13 +777,15 @@ fn test_list_files_all_silos_with_limit() {
 
 #[test]
 fn test_list_files_all_silos_denote_parsing() {
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     let temp_dir = TempDir::new().unwrap();
 
     // Create a Denote-style filename
-    let denote_file = temp_dir.path().join("20231128T233500--test-note__emacs_rust.org");
+    let denote_file = temp_dir
+        .path()
+        .join("20231128T233500--test-note__emacs_rust.org");
     fs::write(&denote_file, "* Test Heading\nSome content").unwrap();
 
     let config = OrgConfig {
@@ -807,8 +809,8 @@ fn test_list_files_all_silos_denote_parsing() {
 
 #[test]
 fn test_list_files_all_silos_silo_name_format() {
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     // Create a structure like ~/repos/gh/myproject/docs
     let temp_root = TempDir::new().unwrap();
@@ -839,8 +841,8 @@ fn test_list_files_all_silos_silo_name_format() {
 
 #[test]
 fn test_discover_repo_docs_integration() {
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     // Create a mock repos structure
     let temp_root = TempDir::new().unwrap();
@@ -877,14 +879,22 @@ fn test_discover_repo_docs_integration() {
 
     // Test discover_repo_docs
     let discovered = config.discover_repo_docs();
-    assert_eq!(discovered.len(), 2, "Should discover 2 repo docs directories");
+    assert_eq!(
+        discovered.len(),
+        2,
+        "Should discover 2 repo docs directories"
+    );
 
     // Test list_files_all_silos includes discovered repos
     let org_mode = OrgMode::new(config).unwrap();
     let files = org_mode.list_files_all_silos(None, None).unwrap();
 
     // Should find: notes.org + doc1.org + doc2.org = 3 files
-    assert_eq!(files.len(), 3, "Should find files from primary + discovered silos");
+    assert_eq!(
+        files.len(),
+        3,
+        "Should find files from primary + discovered silos"
+    );
 
     // Verify silo names
     let silo_names: Vec<&str> = files.iter().map(|f| f.silo_name.as_str()).collect();

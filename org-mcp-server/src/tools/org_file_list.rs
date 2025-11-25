@@ -27,7 +27,11 @@ impl OrgModeRouter {
     )]
     async fn tool_list_files(
         &self,
-        Parameters(ListFilesRequest { tags, limit, all_silos }): Parameters<ListFilesRequest>,
+        Parameters(ListFilesRequest {
+            tags,
+            limit,
+            all_silos,
+        }): Parameters<ListFilesRequest>,
     ) -> Result<CallToolResult, McpError> {
         let org_mode = self.org_mode.lock().await;
 
